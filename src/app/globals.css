@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* The elegant warm cream backdrop from your reference image */
+  --background: #f4f3ee; 
+  
+  /* Deep ink-charcoal for crisp, readable, premium typography */
+  --foreground: #1a1a1a; 
+  
+  /* Smooth, unified curves for all cards, tags, and inputs */
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  
+  /* Adding the premium soft background color as a Tailwind token */
+  --color-cream-canvas: #f4f3ee;
+  --color-cream-card: #ffffff;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom premium utility to mimic the soft outline style from the reference */
+.premium-border {
+  border: 1px solid rgba(26, 26, 26, 0.08);
+}
+
+/* Premium smooth focus rings matching your Indigo accent */
+input:focus, button:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
 }
