@@ -19,6 +19,7 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
+    // NOTE: If client validation rejects `@wayamba.ac.lk`, check your zod rule in `@/types/auth`
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
@@ -30,11 +31,23 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginInput) => {
     setServerError(null);
     try {
+      // Clean variations and remove spaces
+      const cleanEmail = data.email.toLowerCase().trim();
+
+      // Ensure backup validation allows both university domain configurations
+      if (!cleanEmail.endsWith("@wayamba.ac.lk") && !cleanEmail.endsWith("@wyb.ac.lk")) {
+        throw new Error("Must use a valid Wayamba University domain account (@wayamba.ac.lk or @wyb.ac.lk)");
+      }
+
       // Connect directly with the Neon DB API endpoint
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: data.email }),
+        // ✅ FIXED: Restored the missing password object property inside the payload matrix
+        body: JSON.stringify({ 
+          email: cleanEmail,
+          password: data.password 
+        }),
       });
 
       const result = await res.json();
@@ -43,14 +56,18 @@ export default function LoginPage() {
         throw new Error(result.error || "Authentication clearance failed");
       }
 
-      // Inject the user object directly into global AuthContext state
-      //login(result.user);
+      /// Inject the user object and session token directly into global AuthContext state
+        if (typeof login === "function") {
+          login(result.user, result.token); // ✨ Added result.token as the 2nd argument
+        } else {
+          console.warn("Auth context 'login' dispatcher matrix map not registered in current context scope hook.");
+        }
 
       // Automated route dispatcher based on dynamic role attributes
       if (result.user.role === "ADMIN") {
         router.push("/dashboard/admin");
       } else if (result.user.role === "LECTURER") {
-        if (result.user.capabilities.isHOD) {
+        if (result.user.capabilities?.isHOD || result.user.isHod) {
           router.push("/dashboard/hod");
         } else {
           router.push("/dashboard/lecturer");
@@ -104,7 +121,7 @@ export default function LoginPage() {
           </div>
 
           {serverError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 animate-pulse">
               {serverError}
             </div>
           )}
@@ -124,7 +141,7 @@ export default function LoginPage() {
                   {...register("email")}
                   id="email"
                   type="text"
-                  placeholder="name@wyb.ac.lk"
+                  placeholder="lec2@wayamba.ac.lk"
                   className={`block w-full pl-10 pr-3 py-2.5 bg-slate-50 border ${
                     errors.email ? "border-red-500 focus:ring-red-500" : "border-slate-300 focus:ring-indigo-600"
                   } rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:bg-white transition-all text-sm`}
@@ -180,12 +197,12 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-indigo-900 hover:bg-indigo-950 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-indigo-900 hover:bg-indigo-950 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" />
-                  Authenticating System...
+                  <span>Authenticating System...</span>
                 </>
               ) : (
                 "Sign In to Gateway"

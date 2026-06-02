@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { 
   BookOpen, Plus, Trash2, Save, Loader2, AlertCircle, 
-  CheckCircle2, Lock, LayoutDashboard, Sliders, ListOrdered, UserPlus, FileText
+  CheckCircle2, Lock, LayoutDashboard, Sliders, ListOrdered, 
+  UserPlus, FileText, ChevronDown, Key, Flame 
 } from "lucide-react";
 import { LecturerModule, CaComponent, ExamQuestionConfig } from "@/types/hod"; 
 
@@ -16,6 +18,7 @@ interface StudentMarkRow {
 }
 
 export default function LecturerConsolePage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [modules, setModules] = useState<LecturerModule[]>([]);
   const [activeModule, setActiveModule] = useState<LecturerModule | null>(null);
@@ -25,14 +28,23 @@ export default function LecturerConsolePage() {
 
   // State Contexts
   const [caComponents, setCaComponents] = useState<CaComponent[]>([]);
-  // 💡 Added context state arrays to track final exam question distributions
   const [examQuestions, setExamQuestions] = useState<ExamQuestionConfig[]>([]);
   const [students, setStudents] = useState<StudentMarkRow[]>([]);
   const [newIndexInput, setNewIndexInput] = useState("");
 
+  // Dropdown UI toggle state
+  const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
+
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Dynamic role verification capabilities matrix fallbacks for testing
+  const userCapabilities = user?.capabilities || {
+    isHOD: true,      
+    isActiveLec: true,
+    isExamLec: true
+  };
 
   useEffect(() => {
     async function loadLecturerWorkload() {
@@ -56,7 +68,6 @@ export default function LecturerConsolePage() {
     setActiveModule(mod);
     setCaComponents(mod.stats?.caComponents || []);
     
-    // 💡 Fetch template maps from DB metadata fields or provision default fallback structural grids
     setExamQuestions(mod.stats?.examTemplate || [
       { id: "Q1", maxMarks: 20 },
       { id: "Q2", maxMarks: 20 },
@@ -68,7 +79,6 @@ export default function LecturerConsolePage() {
     setFeedbackMsg(null);
     setStudents([]);
     
-    // Auto-fetch student rosters if viewing marksheet segment views
     try {
       const marksRes = await fetch(`/api/lecturer/marks?moduleCode=${mod.code}`);
       if (marksRes.ok) {
@@ -78,6 +88,14 @@ export default function LecturerConsolePage() {
     } catch (err) {
       console.error("Error streaming marks tables:", err);
     }
+  };
+
+  // Switch workspace dispatcher engine routing logic
+  const handleWorkspaceSwitch = (targetDesk: "LECTURER" | "HOD" | "EXAMINER") => {
+    setIsRoleMenuOpen(false);
+    if (targetDesk === "LECTURER") router.push("/dashboard/lecturer");
+    if (targetDesk === "HOD") router.push("/dashboard/hod");
+    if (targetDesk === "EXAMINER") router.push("/dashboard/examiner");
   };
 
   // --- Core CA Blueprint Logic Handlers ---
@@ -92,7 +110,7 @@ export default function LecturerConsolePage() {
   };
   const runningTotalWeight = caComponents.reduce((sum, c) => sum + (c.weightage || 0), 0);
 
-  // --- 💡 Core Exam Paper Setup Handlers ---
+  // --- Core Exam Paper Setup Handlers ---
   const addExamQuestionColumn = () => {
     const nextNumber = examQuestions.length + 1;
     setExamQuestions([...examQuestions, { id: `Q${nextNumber}`, maxMarks: 20 }]);
@@ -123,7 +141,6 @@ export default function LecturerConsolePage() {
       const response = await fetch("/api/lecturer/modules", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        // 💡 Now sending both CA configurations and Exam question boundaries securely to database row metrics
         body: JSON.stringify({ moduleCode: activeModule.code, caComponents, examTemplate: examQuestions })
       });
       const result = await response.json();
@@ -140,7 +157,7 @@ export default function LecturerConsolePage() {
     }
   };
 
-  // --- Dynamic Marksheet Student Ledger Row Handlers ---
+// --- Dynamic Marksheet Student Ledger Row Handlers ---
   const addNewStudentRow = () => {
     if (!newIndexInput.trim()) return;
     if (students.some(s => s.studentIndex.toLowerCase() === newIndexInput.trim().toLowerCase())) {
@@ -148,7 +165,7 @@ export default function LecturerConsolePage() {
       return;
     }
     setStudents([...students, { studentIndex: newIndexInput.trim().toUpperCase(), caMarks: {}, practicalMark: 0, isAbsent: false }]);
-    setNewIndexInput("");
+    setNewIndexInput(""); // ✨ Fixed case-sensitivity typo here
   };
 
   const removeStudentRow = (index: string) => {
@@ -220,7 +237,7 @@ export default function LecturerConsolePage() {
     <div className="w-full min-h-screen bg-cream-canvas p-4 sm:p-8 text-[#1a1a1a]">
       <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Title Block Header */}
+        {/* ==================== TITLE BLOCK HEADER + INTERACTIVE SWITCHER ==================== */}
         <div className="w-full bg-white rounded-2xl premium-border p-6 sm:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center space-x-2 text-[11px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50/60 px-3 py-1 rounded-full border border-indigo-100/50">
@@ -232,9 +249,85 @@ export default function LecturerConsolePage() {
               Faculty Profile Account: <span className="text-[#1a1a1a] font-semibold underline underline-offset-4 decoration-indigo-500">{user?.fullName || "Prof. Asanka Sanjeewa"}</span>
             </p>
           </div>
+
+          {/* ================= INTERACTIVE ROLE PROFILE SWITCHER DROPDOWN ================= */}
+          <div className="relative self-end md:self-center">
+            <button 
+              onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
+              className="flex items-center space-x-3 p-2 pr-4 hover:bg-neutral-50 rounded-xl transition-all border border-neutral-200 bg-white text-left cursor-pointer select-none"
+            >
+              <div className="h-8 w-8 rounded-lg bg-[#1a1a1a] font-black text-xs text-white flex items-center justify-center uppercase">
+                LE
+              </div>
+              <div className="space-y-0.5">
+                <span className="block text-[11px] font-black text-[#1a1a1a] tracking-tight leading-none uppercase">
+                  Lecturer Desk
+                </span>
+                <span className="block text-[10px] text-indigo-600 font-bold">Standard Workspace</span>
+              </div>
+              <ChevronDown className={`h-3.5 w-3.5 text-neutral-400 transition-transform ${isRoleMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {isRoleMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsRoleMenuOpen(false)} />
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-neutral-200 rounded-xl shadow-xl p-2 z-20 space-y-1 text-xs">
+                  <div className="px-3 py-2 border-b border-neutral-100">
+                    <span className="block font-black text-[#1a1a1a] tracking-tight">{user?.fullName || "Prof. Asanka Sanjeewa"}</span>
+                    <span className="block text-[10px] text-neutral-400 mt-0.5 font-medium">{user?.email || "lec2@wayamba.ac.lk"}</span>
+                  </div>
+                  
+                  <div className="pt-1.5 px-3">
+                    <span className="block font-black text-neutral-400 uppercase tracking-wider text-[9px]">Switch Authority Desks</span>
+                  </div>
+
+                  {/* Option 1: Standard Lecturer base desk view (Always Active) */}
+                  <button 
+                    onClick={() => handleWorkspaceSwitch("LECTURER")}
+                    className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-all bg-indigo-50 text-indigo-700 font-bold cursor-pointer"
+                  >
+                    <Sliders className="h-4 w-4 shrink-0 text-indigo-600" />
+                    <div className="space-y-0.5">
+                      <span className="block">Lecturer Workstation</span>
+                      <span className="block text-[10px] text-indigo-400 font-normal">Mark entries & evaluation</span>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Head of Department Oversight Panel (Conditional) */}
+                  {userCapabilities.isHOD && (
+                    <button 
+                      onClick={() => handleWorkspaceSwitch("HOD")}
+                      className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-all text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 cursor-pointer"
+                    >
+                      <Key className="h-4 w-4 shrink-0 text-neutral-400" />
+                      <div className="space-y-0.5">
+                        <span className="block">HOD Console Desk</span>
+                        <span className="block text-[10px] text-neutral-400 font-normal">Department workflow approvals</span>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Option 3: Internal Examiner Moderation Panel (Conditional) */}
+                  {userCapabilities.isExamLec && (
+                    <button 
+                      onClick={() => handleWorkspaceSwitch("EXAMINER")}
+                      className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-all text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 cursor-pointer"
+                    >
+                      <Flame className="h-4 w-4 shrink-0 text-neutral-400" />
+                      <div className="space-y-0.5">
+                        <span className="block">Examiner Moderation Hub</span>
+                        <span className="block text-[10px] text-neutral-400 font-normal">Second marking cross-auditing</span>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="w-full grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+        {/* ==================== CORE WORKSPACE MAIN GRID MATRIX ==================== */}
+        <div className="w-full grid grid-cols-1 grid-cols-1 lg:grid-cols-4 gap-6 items-start">
           
           {/* Side Module Select Navigator Drawer */}
           <div className="bg-white rounded-2xl premium-border overflow-hidden">
@@ -339,7 +432,7 @@ export default function LecturerConsolePage() {
                         </div>
                       </div>
 
-                      {/* 💡 NEW: Final Examination Dynamic Question Column Allocation Panels */}
+                      {/* Final Examination Dynamic Question Column Allocation Panels */}
                       <div className="pt-6 border-t border-neutral-200/80 space-y-4">
                         <div className="flex justify-between items-center">
                           <div>

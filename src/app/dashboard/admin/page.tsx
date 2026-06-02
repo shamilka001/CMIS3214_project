@@ -1,56 +1,166 @@
 "use client";
 
-import React, { useState } from "react";
-import RoleGuard from "@/components/layout/RoleGuard";
+import React, { useState, useEffect } from "react";
 import { 
-  ShieldAlert, 
-  Users, 
-  BookOpen, 
   Key, 
-  ToggleLeft, 
-  ToggleRight, 
+  Sliders, 
+  Flame, 
+  Trash2, 
   UserPlus, 
-  Search, 
-  Shield,
-  Sliders,
-  Flame,
-  LayoutDashboard,
-  HelpCircle,
-  Bell,
-  Grid,
-  SlidersHorizontal,
-  ChevronDown,
-  Globe2,
-  Plus
+  BookOpen, 
+  Search,
+  Loader2,
+  X,
+  ChevronDown
 } from "lucide-react";
-import { SystemUser, SystemCourseModule } from "@/types/admin";
 
-const mockUsers: SystemUser[] = [
-  { id: "u-1", email: "hod.cis@wyb.ac.lk", fullName: "Dr. Faculty Head", role: "LECTURER", department: "Computing & Information Systems", capabilities: { isHOD: true, isActiveLec: true, isExamLec: false } },
-  { id: "u-2", email: "asanka.s@wyb.ac.lk", fullName: "Prof. Asanka Sanjeewa", role: "LECTURER", department: "Computing & Information Systems", capabilities: { isHOD: false, isActiveLec: true, isExamLec: true } },
-  { id: "u-3", email: "deepani.w@wyb.ac.lk", fullName: "Dr. Deepani Wijesekara", role: "LECTURER", department: "Computing & Information Systems", capabilities: { isHOD: false, isActiveLec: true, isExamLec: true } },
-];
+interface SystemUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: "ADMIN" | "LECTURER";
+  department: string;
+  capabilities: {
+    isHOD: boolean;
+    isActiveLec: boolean;
+    isExamLec: boolean;
+  };
+}
 
-const mockModules: SystemCourseModule[] = [
-  { id: "m-1", code: "CMIS 3112", name: "Rapid Application Development", department: "Computing & Information Systems", assignedLecturerId: "u-2", assignedLecturerName: "Prof. Asanka Sanjeewa", totalStudents: 124 },
-  { id: "m-2", code: "CMIS 3142", name: "Object-Oriented Analysis & Design", department: "Computing & Information Systems", assignedLecturerId: "u-3", assignedLecturerName: "Dr. Deepani Wijesekara", totalStudents: 118 },
-];
+interface AcademicModule {
+  id: string;
+  code: string;
+  name: string;
+  assignedLecturerName: string;
+  totalStudents: number;
+}
 
-export default function AdminDashboardPage() {
+export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<"USERS" | "MODULES">("USERS");
-  const [users, setUsers] = useState<SystemUser[]>(mockUsers);
-  const [modules] = useState<SystemCourseModule[]>(mockModules);
   const [searchQuery, setSearchQuery] = useState("");
-  const [globalEmergencyFreeze, setGlobalEmergencyFreeze] = useState(false);
 
-  const toggleCapability = (userId: string, capability: "isHOD" | "isActiveLec" | "isExamLec") => {
+  // Control state to toggle account side-drawer modal visibility
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [users, setUsers] = useState<SystemUser[]>([]);
+  const [modules, setModules] = useState<AcademicModule[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Form input field states
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [role, setRole] = useState<"ADMIN" | "LECTURER">("LECTURER");
+  const [password, setPassword] = useState("");
+  const [department, setDepartment] = useState("Computing & Information Systems");
+  const [isHod, setIsHod] = useState(false);
+  const [isActiveLec, setIsActiveLec] = useState(true);
+  const [isExamLec, setIsExamLec] = useState(false);
+
+  useEffect(() => {
+    async function bootstrapDashboardData() {
+      try {
+        const response = await fetch("/api/admin/users");
+        if (response.ok) {
+          const data = await response.json();
+          const transformedUsers = data.map((u: any) => ({
+            id: u.id,
+            email: u.email,
+            fullName: u.fullName,
+            role: u.role,
+            department: u.department || "Computing & Information Systems",
+            capabilities: {
+              isHOD: u.isHod,
+              isActiveLec: u.isActiveLec,
+              isExamLec: u.isExamLec
+            }
+          }));
+          setUsers(transformedUsers);
+        }
+      } catch (err) {
+        console.error("Pipeline failure reading users roster:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    bootstrapDashboardData();
+  }, []);
+
+  const handleCreateUserAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          fullName,
+          role,
+          password,
+          isHod,
+          isActiveLec,
+          isExamLec
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        const newUser: SystemUser = {
+          id: result.user?.id || `u-${Date.now()}`,
+          email: email.toLowerCase().trim(),
+          fullName: fullName.trim(),
+          role: role as "ADMIN" | "LECTURER",
+          department: department,
+          capabilities: { isHOD: isHod, isActiveLec: isActiveLec, isExamLec: isExamLec }
+        };
+
+        setUsers(prev => [newUser, ...prev]);
+        
+        // Reset field matrices back to baseline standards & close modal drawer
+        setEmail("");
+        setFullName("");
+        setPassword("");
+        setIsHod(false);
+        setIsExamLec(false);
+        setIsModalOpen(false);
+        alert("System user profile provisioned successfully.");
+      } else {
+        alert(result.error || "Provisioning interface pipeline rejected configurations.");
+      }
+    } catch (err) {
+      alert("Network handshake fault parsing secure admin commands.");
+    }
+  };
+
+  const handleDeleteUserAccount = async (userId: string) => {
+    const confirmed = window.confirm("Are you absolutely sure you want to permanently delete this user account profile?");
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`/api/admin/users?id=${userId}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setUsers(prev => prev.filter(user => user.id !== userId));
+      } else {
+        alert(result.error || "System rejected account destruction instruction.");
+      }
+    } catch (err) {
+      alert("Network handshake fault processing secure administration commands.");
+    }
+  };
+
+  const toggleCapability = (userId: string, flag: "isHOD" | "isActiveLec" | "isExamLec") => {
     setUsers(prev => prev.map(u => {
       if (u.id === userId) {
         return {
           ...u,
           capabilities: {
             ...u.capabilities,
-            [capability]: !u.capabilities[capability]
+            [flag]: !u.capabilities[flag]
           }
         };
       }
@@ -59,281 +169,171 @@ export default function AdminDashboardPage() {
   };
 
   const filteredUsers = users.filter(u => 
-    u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    u.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <RoleGuard allowedRoles={["ADMIN"]}>
-      <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-slate-50/50 p-8 text-slate-800">
+      
+      {/* Structural Header block context */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 pb-5">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900">System Control Desk</h1>
+          <p className="text-slate-500 text-xs mt-1 font-medium">Wayamba University Examination Administration System Panel</p>
+        </div>
         
-        {/* Left Sidebar Layout */}
-        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-6 shrink-0 hidden md:flex">
-          <div className="space-y-8">
-            {/* Core Brand Header */}
-            <div className="flex items-center space-x-3 px-2">
-              <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-md shadow-blue-600/20">
-                <Shield className="h-4 w-4 stroke-[2.5]" />
-              </div>
-              <span className="font-bold text-lg tracking-tight text-slate-800">Wayamba</span>
-            </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setActiveTab("USERS")}
+            className={`px-4 py-2 rounded-lg font-bold text-xs inline-flex items-center space-x-2 transition-all cursor-pointer ${
+              activeTab === "USERS" ? "bg-slate-900 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            <span>Manage Accounts</span>
+          </button>
+          {/* <button 
+            onClick={() => setActiveTab("MODULES")}
+            className={`px-4 py-2 rounded-lg font-bold text-xs inline-flex items-center space-x-2 transition-all cursor-pointer ${
+              activeTab === "MODULES" ? "bg-slate-900 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span>Module Registries</span>
+          </button>*/}
+        </div>
+      </div>
 
-            {/* Sidebar Links */}
-            <nav className="space-y-6">
-              <div className="space-y-1">
-                <span className="block px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Core Dashboard</span>
-                <button className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-all">
-                  <LayoutDashboard className="h-4 w-4" />
-                  <span>Overview</span>
-                </button>
-              </div>
-
-              <div className="space-y-1">
-                <span className="block px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Infrastructures</span>
-                
-                <button 
-                  onClick={() => { setActiveTab("USERS"); setSearchQuery(""); }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                    activeTab === "USERS" 
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" 
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
-                  }`}
-                >
-                  <Users className="h-4 w-4" />
-                  <span>User Management</span>
-                </button>
-
-                <button 
-                  onClick={() => { setActiveTab("MODULES"); setSearchQuery(""); }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                    activeTab === "MODULES" 
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" 
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
-                  }`}
-                >
-                  <BookOpen className="h-4 w-4" />
-                  <span>Course Mappings</span>
-                </button>
-              </div>
-            </nav>
+      {/* Main Container - Now expands to full-width beautifully */}
+      <div className="w-full bg-white border border-slate-200/80 rounded-xl shadow-sm overflow-hidden flex flex-col">
+        
+        {/* Quick Filter Search and Creation Action Trigger Toolbar */}
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="relative max-w-xs w-full">
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder={activeTab === "USERS" ? "Search profiles by email or name..." : "Search modules..."}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            />
           </div>
 
-          <div className="px-3 text-xs text-slate-400 font-medium border-t border-slate-100 pt-4">
-            <p>Platform System v2.6</p>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">
+              {activeTab === "USERS" ? `${filteredUsers.length} Records Loaded` : "Active Curriculum Registry"}
+            </span>
+            {activeTab === "USERS" && (
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all inline-flex items-center space-x-1.5 cursor-pointer"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>Create User Profile</span>
+              </button>
+            )}
           </div>
-        </aside>
+        </div>
 
-        {/* Right Main Panel Workspace Container */}
-        <main className="flex-1 flex flex-col p-6 md:p-8 space-y-6 min-w-0">
-          
-          {/* Header Row */}
-          <header className="flex items-center justify-between pb-2">
-            <div>
-              <h1 className="text-xl font-bold text-slate-800 tracking-tight">
-                {activeTab === "USERS" ? "Users" : "Courses"}
-              </h1>
+        {/* Main Structural Output Grid Container */}
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="p-12 text-center flex flex-col justify-center items-center space-y-2">
+              <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
+              <span className="text-xs font-bold text-slate-400">Synchronizing system database structures...</span>
             </div>
-            
-            {/* Action Bar Indicators */}
-            <div className="flex items-center space-x-3 text-slate-400">
-              <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><Globe2 className="h-4 w-4" /></button>
-              <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><Grid className="h-4 w-4" /></button>
-              <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"><HelpCircle className="h-4 w-4" /></button>
-              <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors relative">
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-blue-600 rounded-full" />
-              </button>
-              <div className="h-6 w-px bg-slate-200 mx-1" />
-              <div className="h-8 w-8 rounded-full bg-blue-100 font-bold text-xs text-blue-600 flex items-center justify-center border border-blue-200">
-                SU
-              </div>
-            </div>
-          </header>
-
-          {/* Horizontally Stacked Rounded-Square Metrics Widget Strip */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* Total Users Widget */}
-            <div className="bg-white p-5 rounded-[18px] border border-slate-200/70 shadow-[0_2px_8px_rgba(0,0,0,0.01)] flex items-center space-x-4">
-              <div className="h-12 w-12 bg-blue-600 text-white rounded-[14px] flex items-center justify-center shrink-0 shadow-sm shadow-blue-600/10">
-                <Users className="h-5 w-5 stroke-[2.2]" />
-              </div>
-              <div className="space-y-0.5">
-                <span className="block text-xs font-medium text-slate-400 tracking-wide">Total Users</span>
-                <span className="text-xl font-bold text-slate-800 tracking-tight">{users.length} Profiles</span>
-              </div>
-            </div>
-
-            {/* Curriculums Widget */}
-            <div className="bg-white p-5 rounded-[18px] border border-slate-200/70 shadow-[0_2px_8px_rgba(0,0,0,0.01)] flex items-center space-x-4">
-              <div className="h-12 w-12 bg-blue-600 text-white rounded-[14px] flex items-center justify-center shrink-0 shadow-sm shadow-blue-600/10">
-                <BookOpen className="h-5 w-5 stroke-[2.2]" />
-              </div>
-              <div className="space-y-0.5">
-                <span className="block text-xs font-medium text-slate-400 tracking-wide">Curriculums</span>
-                <span className="text-xl font-bold text-slate-800 tracking-tight">{modules.length} Modules</span>
-              </div>
-            </div>
-
-            {/* Node Guard Widget */}
-            <div className="bg-white p-5 rounded-[18px] border border-slate-200/70 shadow-[0_2px_8px_rgba(0,0,0,0.01)] flex items-center space-x-4">
-              <div className="h-12 w-12 bg-blue-600 text-white rounded-[14px] flex items-center justify-center shrink-0 shadow-sm shadow-blue-600/10">
-                <Shield className="h-5 w-5 stroke-[2.2]" />
-              </div>
-              <div className="space-y-0.5">
-                <span className="block text-xs font-medium text-slate-400 tracking-wide">Node Guard</span>
-                <span className="text-xl font-bold text-slate-800 tracking-tight">RBAC Active</span>
-              </div>
-            </div>
-
-            {/* Interactive Global Freeze Widget */}
-            <div className={`p-5 rounded-[18px] border transition-all flex items-center justify-between ${
-              globalEmergencyFreeze ? "border-red-200 bg-red-50/40" : "bg-white border-slate-200/70 shadow-[0_2px_8px_rgba(0,0,0,0.01)]"
-            }`}>
-              <div className="flex items-center space-x-4 min-w-0">
-                <div className={`h-12 w-12 rounded-[14px] flex items-center justify-center shrink-0 shadow-sm ${
-                  globalEmergencyFreeze ? "bg-red-500 text-white shadow-red-500/10" : "bg-blue-600 text-white shadow-blue-600/10"
-                }`}>
-                  <ShieldAlert className="h-5 w-5 stroke-[2.2]" />
-                </div>
-                <div className="space-y-0.5 min-w-0 truncate">
-                  <span className="block text-xs font-medium text-slate-400 tracking-wide">Global Freeze</span>
-                  <span className={`text-sm font-bold block truncate ${globalEmergencyFreeze ? "text-red-600 font-extrabold" : "text-slate-700"}`}>
-                    {globalEmergencyFreeze ? "SYSTEM LOCKED" : "Operations Safe"}
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => setGlobalEmergencyFreeze(!globalEmergencyFreeze)} className="focus:outline-none pl-2 shrink-0">
-                {globalEmergencyFreeze ? (
-                  <ToggleRight className="h-8 w-8 text-red-500" />
-                ) : (
-                  <ToggleLeft className="h-8 w-8 text-slate-300 hover:text-slate-400 transition-colors" />
-                )}
-              </button>
-            </div>
-          </section>
-
-          {/* Dynamic Table Board Frame */}
-          <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col flex-1">
-            
-            {/* Filter controls and action hooks */}
-            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white">
-              <span className="text-base font-bold text-slate-800">
-                {activeTab === "USERS" ? "Course List" : "Curriculum Registry Records"}
-              </span>
-
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full text-xs pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                  />
-                </div>
-                
-                <button className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 bg-white hover:bg-slate-50 inline-flex items-center space-x-2 transition-colors">
-                  <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
-                  <span>Filter</span>
-                </button>
-
-                <button className="px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 bg-white hover:bg-slate-50 inline-flex items-center space-x-2 transition-colors">
-                  <span>Sort by</span>
-                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                </button>
-
-                {activeTab === "USERS" && (
-                  <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors inline-flex items-center space-x-1.5">
-                    <Plus className="h-4 w-4 stroke-[2.5]" />
-                    <span>Add New Course</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Structured Table Sheet Layout */}
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left border-collapse min-w-[900px]">
-                <thead>
-                  <tr className="border-b border-slate-200 text-xs font-bold text-slate-400 tracking-wider bg-slate-50/70">
-                    <th className="p-4 pl-6 w-16">#</th>
-                    {activeTab === "USERS" ? (
-                      <>
-                        <th className="p-4">User Identity Profile</th>
-                        <th className="p-4">Department Framework</th>
-                        <th className="p-4">Role Assigned</th>
-                        <th className="p-4 text-center pr-6">Capability Boundaries Switches</th>
-                      </>
-                    ) : (
-                      <>
-                        <th className="p-4">Module Code</th>
-                        <th className="p-4">Module Title Description</th>
-                        <th className="p-4">Course Allocation Instructor</th>
-                        <th className="p-4 pr-6">Enrolled Space Parameters</th>
-                      </>
-                    )}
-                  </tr>
-                </thead>
-                
-                <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-600">
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black tracking-wider text-slate-400">
+                  <th className="p-4 pl-6 w-12">#</th>
                   {activeTab === "USERS" ? (
-                    filteredUsers.map((u, idx) => (
-                      <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-4 pl-6 font-bold text-slate-400">{idx + 1}</td>
-                        <td className="p-4">
-                          <span className="block font-bold text-slate-800 text-sm">{u.fullName}</span>
-                          <span className="text-slate-400 font-normal block mt-0.5">{u.email}</span>
-                        </td>
-                        <td className="p-4">
-                          <span className="inline-block px-2.5 py-1 rounded bg-blue-50 text-blue-600 font-semibold text-[11px]">
-                            {u.department}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`inline-block font-bold px-2.5 py-0.5 rounded text-[10px] uppercase ${
-                            u.role === "ADMIN" ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
-                          }`}>
-                            {u.role}
-                          </span>
-                        </td>
-                        <td className="p-4 pr-6">
-                          <div className="flex justify-center items-center gap-2">
-                            <button 
-                              onClick={() => toggleCapability(u.id, "isHOD")}
-                              className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold inline-flex items-center space-x-1.5 transition-all ${
-                                u.capabilities.isHOD 
-                                  ? "bg-blue-600 border-blue-600 text-white shadow-sm" 
-                                  : "bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700"
-                              }`}
-                            >
-                              <Key className="h-3 w-3" />
-                              <span>HOD Console</span>
-                            </button>
+                    <>
+                      <th className="p-4">Profile Information</th>
+                      <th className="p-4">Department</th>
+                      <th className="p-4">Role Matrix</th>
+                      <th className="p-4 text-center">Interactive Capabilities Controls Matrix</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="p-4">Code</th>
+                      <th className="p-4">Course Module Name</th>
+                      <th className="p-4">Assigned Director Core</th>
+                      <th className="p-4 pr-6">Roster Metrics</th>
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-600">
+                {activeTab === "USERS" ? (
+                  filteredUsers.map((u, idx) => (
+                    <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4 pl-6 font-bold text-slate-400">{idx + 1}</td>
+                      <td className="p-4">
+                        <span className="block font-bold text-slate-800 text-sm">{u.fullName}</span>
+                        <span className="text-slate-400 font-normal block mt-0.5">{u.email}</span>
+                      </td>
+                      <td className="p-4">
+                        <span className="inline-block px-2.5 py-1 rounded bg-blue-50 text-blue-600 font-semibold text-[11px]">
+                          {u.department}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <span className={`inline-block font-bold px-2.5 py-0.5 rounded text-[10px] uppercase ${
+                          u.role === "ADMIN" ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="p-4 pr-6">
+                        <div className="flex justify-center items-center gap-2">
+                          <button 
+                            onClick={() => toggleCapability(u.id, "isHOD")}
+                            className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold inline-flex items-center space-x-1.5 transition-all cursor-pointer ${
+                              u.capabilities.isHOD 
+                                ? "bg-blue-600 border-blue-600 text-white shadow-sm" 
+                                : "bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700"
+                            }`}
+                          >
+                            <Key className="h-3 w-3" />
+                            <span>HOD Console</span>
+                          </button>
+                          
+                          <button 
+                            onClick={() => toggleCapability(u.id, "isActiveLec")}
+                            className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold inline-flex items-center space-x-1.5 transition-all cursor-pointer ${
+                              u.capabilities.isActiveLec 
+                                ? "bg-blue-600 border-blue-600 text-white shadow-sm" 
+                                : "bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700"
+                            }`}
+                          >
+                            <Sliders className="h-3 w-3" />
+                            <span>Active Lec</span>
+                          </button>
+                          
+                          <button 
+                            onClick={() => toggleCapability(u.id, "isExamLec")}
+                            className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold inline-flex items-center space-x-1.5 transition-all cursor-pointer ${
+                              u.capabilities.isExamLec 
+                                ? "bg-blue-600 border-blue-600 text-white shadow-sm" 
+                                : "bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700"
+                            }`}
+                          >
+                            <Flame className="h-3 w-3" />
+                            <span>Examiner Desk</span>
+                          </button>
+        
+
+                            <div className="h-5 w-px bg-slate-200 mx-1" />
                             
                             <button 
-                              onClick={() => toggleCapability(u.id, "isActiveLec")}
-                              className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold inline-flex items-center space-x-1.5 transition-all ${
-                                u.capabilities.isActiveLec 
-                                  ? "bg-blue-600 border-blue-600 text-white shadow-sm" 
-                                  : "bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700"
-                              }`}
+                              onClick={() => handleDeleteUserAccount(u.id)}
+                              title="Permanently Purge Profile Account"
+                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-transparent hover:border-rose-100 cursor-pointer"
                             >
-                              <Sliders className="h-3 w-3" />
-                              <span>Active Lec</span>
-                            </button>
-                            
-                            <button 
-                              onClick={() => toggleCapability(u.id, "isExamLec")}
-                              className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold inline-flex items-center space-x-1.5 transition-all ${
-                                u.capabilities.isExamLec 
-                                  ? "bg-blue-600 border-blue-600 text-white shadow-sm" 
-                                  : "bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-700"
-                              }`}
-                            >
-                              <Flame className="h-3 w-3" />
-                              <span>Examiner Desk</span>
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </td>
@@ -358,21 +358,138 @@ export default function AdminDashboardPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            )}
+          </div>
+        </div>
 
-            {/* Unified Table Index Meta Rows Footer */}
-            <div className="p-4 bg-slate-50/50 border-t border-slate-200 flex items-center justify-between text-xs font-semibold text-slate-400">
-              <span>Showing result 1-{activeTab === "USERS" ? filteredUsers.length : modules.length} of entries</span>
-              <div className="flex space-x-2">
-                <button className="px-3 py-1.5 border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 font-medium transition-colors">Previous</button>
-                <button className="px-3 py-1.5 border border-slate-200 rounded-lg bg-white text-slate-600 hover:bg-slate-50 font-medium transition-colors">Next</button>
+      {/* ==================== TRIGGER-DRIVEN OVERLAY SLIDEOVER MODAL ==================== */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-slate-900/40 backdrop-blur-xs transition-all animate-fade-in">
+          <div className="w-full max-w-md h-full bg-white shadow-2xl flex flex-col p-6 overflow-y-auto animate-slide-in">
+            
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="space-y-0.5">
+                <h3 className="text-base font-black text-slate-900 tracking-tight">Provision User Profile</h3>
+                <p className="text-xs text-slate-400">Initialize custom configuration bounds mapping records.</p>
               </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-          </section>
-        </main>
+            <form onSubmit={handleCreateUserAccount} className="flex-1 flex flex-col justify-between mt-6 space-y-5 text-xs">
+              <div className="space-y-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">Full Legal Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Prof. J.K. Perera"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-800 bg-slate-50 focus:bg-white transition-all"
+                  />
+                </div>
 
-      </div>
-    </RoleGuard>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">University Email Endpoint</label>
+                  <input 
+                    type="email" 
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="lecturer@wayamba.ac.lk"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-800 bg-slate-50 focus:bg-white transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">Authorization Role</label>
+                    <div className="relative">
+                      <select 
+                        value={role}
+                        onChange={(e) => setRole(e.target.value as "ADMIN" | "LECTURER")}
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-bold text-slate-700 bg-slate-50 appearance-none"
+                      >
+                        <option value="LECTURER">LECTURER</option>
+                        <option value="ADMIN">SYSTEM ADMIN</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1.5">Access Password</label>
+                    <input 
+                      type="password" 
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-800 bg-slate-50 focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">Department Assignment</label>
+                  <div className="relative">
+                    <select
+                      value={department}
+                      onChange={(e) => setDepartment(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-bold text-slate-700 bg-slate-50 appearance-none"
+                    >
+                      <option value="Computing & Information Systems">Computing & Information Systems</option>
+                      <option value="Industrial Management">Industrial Management</option>
+                      <option value="Electronics">Electronics</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-100 rounded-lg p-3.5 space-y-3 mt-2">
+                  <span className="block font-black text-slate-800 text-[10px] uppercase tracking-wider">Initial Authority Flags</span>
+                  
+                  <label className="flex items-center space-x-2.5 cursor-pointer">
+                    <input type="checkbox" checked={isHod} onChange={(e) => setIsHod(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 h-3.5 w-3.5" />
+                    <span className="font-semibold text-slate-600">Assign Head of Department (HOD) Access</span>
+                  </label>
+
+                  <label className="flex items-center space-x-2.5 cursor-pointer">
+                    <input type="checkbox" checked={isActiveLec} onChange={(e) => setIsActiveLec(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 h-3.5 w-3.5" />
+                    <span className="font-semibold text-slate-600">Set Active Lecturer Visibility</span>
+                  </label>
+
+                  <label className="flex items-center space-x-2.5 cursor-pointer">
+                    <input type="checkbox" checked={isExamLec} onChange={(e) => setIsExamLec(e.target.checked)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 h-3.5 w-3.5" />
+                    <span className="font-semibold text-slate-600">Assign Panel Examiner Desk Access</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 py-2.5 border border-slate-200 rounded-xl font-bold text-slate-600 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl shadow-md shadow-blue-600/15 transition-all cursor-pointer"
+                >
+                  Commit Account Profile
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
